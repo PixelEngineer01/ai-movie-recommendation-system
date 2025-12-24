@@ -25,6 +25,12 @@ if "search_input" not in st.session_state:
 if "selected_genre" not in st.session_state:
     st.session_state.selected_genre = "All Genres"
 
+if "mode" not in st.session_state:
+    st.session_state.mode = "none"  # none | search | genre
+
+if "results" not in st.session_state:
+    st.session_state.results = []
+
 
 # -------------------- UI STYLING --------------------
 st.markdown(
@@ -143,7 +149,6 @@ def robust_recommend(movie_name: str, top_n: int = 10):
         return []
 
     matched = movie_name if movie_name in title_list else smart_match_movie(movie_name)
-
     if not matched:
         return []
 
@@ -212,43 +217,47 @@ with reset:
     reset_btn = st.button("Reset All")
 
 
-# -------------------- RESET --------------------
+# -------------------- BUTTON HANDLERS --------------------
+if search_btn:
+    st.session_state.mode = "search"
+    st.session_state.search_input = search_input
+    st.session_state.selected_genre = "All Genres"
+    st.session_state.results = robust_recommend(search_input)
+
+if genre_btn:
+    st.session_state.mode = "genre"
+    st.session_state.search_input = ""
+    st.session_state.selected_genre = selected_genre
+
+    if selected_genre == "All Genres":
+        st.session_state.results = movies.sample(10)
+    else:
+        filtered = movies[movies["genres"].apply(lambda x: selected_genre in x)]
+        st.session_state.results = filtered.sample(min(10, len(filtered)))
+
 if reset_btn:
+    st.session_state.mode = "none"
     st.session_state.search_input = ""
     st.session_state.selected_genre = "All Genres"
+    st.session_state.results = []
     st.rerun()
 
 
-# -------------------- SEARCH RESULTS --------------------
-if search_btn:
-    st.session_state.search_input = search_input
-    st.session_state.selected_genre = "All Genres"
-
-    recs = robust_recommend(search_input)
-    if not recs:
+# -------------------- RESULT RENDERING --------------------
+if st.session_state.mode == "search":
+    if not st.session_state.results:
         st.error("No strong recommendations found.")
     else:
         cols = st.columns(5)
-        for i, (title, score) in enumerate(recs):
+        for i, (title, score) in enumerate(st.session_state.results):
             with cols[i % 5]:
                 poster = fetch_poster(title)
                 if poster:
                     movie_card(title, poster, score)
 
-
-# -------------------- GENRE RESULTS --------------------
-if genre_btn:
-    st.session_state.search_input = ""
-    st.session_state.selected_genre = selected_genre
-
-    if selected_genre == "All Genres":
-        sample = movies.sample(10)
-    else:
-        sample = movies[movies["genres"].apply(lambda x: selected_genre in x)]
-        sample = sample.sample(min(10, len(sample)))
-
+elif st.session_state.mode == "genre":
     cols = st.columns(5)
-    for i, row in enumerate(sample.itertuples()):
+    for i, row in enumerate(st.session_state.results):
         with cols[i % 5]:
             poster = fetch_poster(row.title)
             if poster:
